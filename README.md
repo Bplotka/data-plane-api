@@ -1,3 +1,9 @@
+# What changed in this fork?*
+
+This fork adds built Golang files for protobufs found in `envoy` and [`protogen.sh`](./protogen.sh) script that compiles them.
+
+*Nothing else is changed*
+
 # Data plane API
 
 This tree hosts the configuration and APIs that drive [Envoy](https://www.envoyproxy.io/). The
