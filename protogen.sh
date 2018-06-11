@@ -33,24 +33,41 @@ GOOGLEAPIS_PATH="${GOPATH}/src/github.com/googleapis/googleapis"
 METRICS_PATH="${GOPATH}/src/github.com/prometheus/client_model"
 TRACE_PATH="${GOPATH}/src/github.com/census-instrumentation/opencensus-proto/opencensus/proto/trace"
 
-# Envoy protos are designed to be build in a standalone manner (per each file).
-# Attempt of build using `*.proto` will result in duplicate errors.
-for protoFile in `find ${PROTOBUF_DIR} -type f -name "*.proto"`; do
-    echo "Generating ${protoFile}"
-	pushd $(dirname "${protoFile}")
-		protoc --gogofast_out=plugins=grpc:. \
-		    -I=. \
+TMP_DIR=/tmp/proto-data-plane-api-envoy
+rm -rf ${TMP_DIR} || true
+mkdir ${TMP_DIR}
+
+pushd ${TMP_DIR}
+    # Envoy protos are designed to be build in a standalone manner (per each file).
+    # Attempt of build using `*.proto` will result in duplicate errors.
+    for protoFile in `find ${PROTOBUF_DIR} -type f -name "*.proto"`; do
+        echo "Generating ${protoFile}"
+        file=$(basename "${protoFile}")
+        package=$(basename "$(dirname "${protoFile}")")
+
+        if [[ "${package}" == "type" ]]; then
+            package="typ"
+        fi
+
+        # Copy to tmp dir.
+        cp ${protoFile} ${file}
+        # Add proper option go_package for consistency.
+        grep -q -F 'option go_package' ${file} || sed -i -E "/^package .*;$/a option go_package = \"${package}\";" ${file}
+
+        protoc --gogofast_out=plugins=grpc:. \
+            -I=. \
             -I="${GOGOPROTO_PATH}" \
             -I="${ROOT_DIR}" \
             -I="${VALIDATE_PATH}" \
             -I="${GOOGLEAPIS_PATH}" \
             -I="${METRICS_PATH}" \
             -I="${TRACE_PATH}" \
-            $(basename "${protoFile}")
+        ${file}
 
-		sed -i.bak -E 's/import _ \"gogoproto\"//g' *.pb.go
-		sed -i.bak -E 's/import _ \"google\/protobuf\"//g' *.pb.go
-		rm -f *.bak
-		goimports -w *.pb.go
-	popd
-done
+        sed -i.bak -E 's/import _ \"gogoproto\"//g' *.pb.go
+        sed -i.bak -E 's/import _ \"google\/protobuf\"//g' *.pb.go
+        rm -f *.bak
+        goimports -w *.pb.go
+        mv "${file%.*}".pb.go "$(dirname "${protoFile}")"/
+    done
+popd
